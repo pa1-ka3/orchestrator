@@ -163,8 +163,7 @@ def run_pipeline(config_path: str, dry_run: bool = False) -> bool:
                     "Non-critical step '%s' failed — logging and continuing.",
                     step.name,
                 )
-                state.step_statuses[step.name] = StepStatus.FAILED #.value
-                state.last_completed_step = step.name
+                state.step_statuses[step.name] = StepStatus.FAILED  # .value
                 save_checkpoint(state)
                 success = False
 
