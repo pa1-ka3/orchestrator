@@ -1,4 +1,9 @@
-"""Checkpoint manager — persistence for recovery points."""
+"""Checkpoint manager — persistence for recovery points.
+
+Checkpoints are stored inside a caller-provided directory. When a pipeline
+declares a ``working_folder`` this is ``<working_folder>/current/pipeline_checkpoints``;
+otherwise a legacy directory next to the config file is used.
+"""
 
 import json
 import logging
@@ -6,24 +11,28 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from .models import CheckpointState, PipelineStatus, StepStatus
+from .models import CheckpointState, PipelineStatus
 
 logger = logging.getLogger(__name__)
 
-CHECKPOINT_DIR_NAME = ".pipeline_checkpoints"
+LEGACY_CHECKPOINT_DIR_NAME = ".pipeline_checkpoints"
 
 
-def _checkpoint_path(config_path: str) -> Path:
-    """Derive checkpoint file path from config path."""
-    cfg = Path(config_path).resolve()
-    checkpoint_dir = cfg.parent / CHECKPOINT_DIR_NAME
-    checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    return checkpoint_dir / f"{cfg.stem}.checkpoint.json"
+def legacy_checkpoint_dir(config_path: str) -> Path:
+    """Fallback checkpoint directory next to the config file."""
+    return Path(config_path).resolve().parent / LEGACY_CHECKPOINT_DIR_NAME
 
 
-def save_checkpoint(state: CheckpointState) -> None:
+def _checkpoint_file(checkpoint_dir: Path, config_path: str) -> Path:
+    """Derive the checkpoint file path within ``checkpoint_dir``."""
+    stem = Path(config_path).resolve().stem
+    return checkpoint_dir / f"{stem}.checkpoint.json"
+
+
+def save_checkpoint(state: CheckpointState, checkpoint_dir: Path) -> None:
     """Persist the current pipeline state to disk."""
-    path = _checkpoint_path(state.config_path)
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    path = _checkpoint_file(checkpoint_dir, state.config_path)
     state.timestamp = datetime.now(timezone.utc).isoformat()
     data = {
         "config_path": state.config_path,
@@ -41,9 +50,9 @@ def save_checkpoint(state: CheckpointState) -> None:
     logger.debug("Checkpoint saved: %s", path)
 
 
-def load_checkpoint(config_path: str) -> Optional[CheckpointState]:
+def load_checkpoint(config_path: str, checkpoint_dir: Path) -> Optional[CheckpointState]:
     """Load a previously saved checkpoint, if it exists."""
-    path = _checkpoint_path(config_path)
+    path = _checkpoint_file(checkpoint_dir, config_path)
     if not path.exists():
         return None
     try:
@@ -63,9 +72,9 @@ def load_checkpoint(config_path: str) -> Optional[CheckpointState]:
         return None
 
 
-def clear_checkpoint(config_path: str) -> None:
+def clear_checkpoint(config_path: str, checkpoint_dir: Path) -> None:
     """Remove the checkpoint file after successful completion."""
-    path = _checkpoint_path(config_path)
+    path = _checkpoint_file(checkpoint_dir, config_path)
     if path.exists():
         path.unlink()
         logger.info("Checkpoint cleared: %s", path)

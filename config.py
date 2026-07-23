@@ -105,11 +105,19 @@ def load_config(config_path: str) -> PipelineConfig:
         if not step.command.strip():
             raise ValueError(f"Step '{step.name}' has an empty command.")
 
+    working_folder = None
+    pipeline_section = data.get("pipeline")
+    if isinstance(pipeline_section, dict):
+        raw_working_folder = pipeline_section.get("working_folder")
+        if raw_working_folder is not None:
+            working_folder = str(raw_working_folder).strip() or None
+
     config = PipelineConfig(
         name=name,
         config_path=str(path),
         config_hash=_compute_hash(path),
         steps=steps,
+        working_folder=working_folder,
     )
 
     active = [s for s in steps if s.is_active]

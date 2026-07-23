@@ -6,7 +6,14 @@ import sys
 import uuid
 from typing import List, Optional
 
-from .checkpoint import clear_checkpoint, load_checkpoint, save_checkpoint
+from pathlib import Path
+
+from .checkpoint import (
+    clear_checkpoint,
+    legacy_checkpoint_dir,
+    load_checkpoint,
+    save_checkpoint,
+)
 from .config import load_config
 from .executor import execute_step
 from .lock import InstanceLock
@@ -19,6 +26,7 @@ from .models import (
     StepStatus,
 )
 from .quarantine import quarantine_step
+from .workspace import Workspace, finalize_workspace, prepare_workspace
 
 logger = logging.getLogger(__name__)
 
@@ -94,14 +102,28 @@ def run_pipeline(config_path: str, dry_run: bool = False) -> bool:
         " → ".join(s.name for s in steps),
     )
 
+    # Resolve run directories. When a working_folder is configured, the active
+    # run lives under <working_folder>/current and its checkpoints inside it;
+    # otherwise fall back to a checkpoint directory next to the config file.
+    workspace: Optional[Workspace] = None
+    current_dir: Optional[Path] = None
+    if config.working_folder and not dry_run:
+        workspace = prepare_workspace(config.working_folder)
+        current_dir = workspace.current_dir
+        checkpoint_dir = workspace.checkpoint_dir
+    else:
+        checkpoint_dir = legacy_checkpoint_dir(config_path)
+
     # Load existing checkpoint for recovery
-    checkpoint = load_checkpoint(config_path)
+    checkpoint = load_checkpoint(config_path, checkpoint_dir)
     run_id = checkpoint.run_id if checkpoint and checkpoint.pipeline_status == PipelineStatus.IN_PROGRESS else str(uuid.uuid4())[:8]
     start_index = _determine_resume_index(steps, checkpoint, config)
 
     if start_index >= len(steps):
         logger.info("All steps already completed in previous run.")
-        clear_checkpoint(config_path)
+        clear_checkpoint(config_path, checkpoint_dir)
+        if workspace is not None:
+            finalize_workspace(workspace)
         return True
 
     # Initialize checkpoint state
@@ -133,14 +155,14 @@ def run_pipeline(config_path: str, dry_run: bool = False) -> bool:
 
         # Mark step as running and save checkpoint (recovery point)
         state.step_statuses[step.name] = StepStatus.RUNNING #.value
-        save_checkpoint(state)
+        save_checkpoint(state, checkpoint_dir)
 
-        result: StepResult = execute_step(step)
+        result: StepResult = execute_step(step, current_dir)
 
         if result.status == StepStatus.COMPLETED:
             state.step_statuses[step.name] = StepStatus.COMPLETED #.value
             state.last_completed_step = step.name
-            save_checkpoint(state)
+            save_checkpoint(state, checkpoint_dir)
         else:
             # Step failed
             if step.is_critical:
@@ -156,23 +178,26 @@ def run_pipeline(config_path: str, dry_run: bool = False) -> bool:
                 data_path = step.kwargs.get("output") or step.kwargs.get("input")
                 quarantine_step(config_path, step, result, run_id, data_path)
 
-                save_checkpoint(state)
+                save_checkpoint(state, checkpoint_dir)
                 return False
             else:
                 logger.warning(
                     "Non-critical step '%s' failed — logging and continuing.",
                     step.name,
                 )
-                state.step_statuses[step.name] = StepStatus.FAILED  # .value
-                save_checkpoint(state)
+                state.step_statuses[step.name] = StepStatus.FAILED #.value
+                state.last_completed_step = step.name
+                save_checkpoint(state, checkpoint_dir)
                 success = False
 
     state.pipeline_status = PipelineStatus.COMPLETED if success else PipelineStatus.FAILED
-    save_checkpoint(state)
+    save_checkpoint(state, checkpoint_dir)
 
     if success:
         logger.info("Pipeline '%s' completed successfully.", config.name)
-        clear_checkpoint(config_path)
+        clear_checkpoint(config_path, checkpoint_dir)
+        if workspace is not None:
+            finalize_workspace(workspace)
     else:
         logger.warning("Pipeline '%s' completed with non-critical failures.", config.name)
 

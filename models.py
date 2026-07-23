@@ -40,6 +40,7 @@ class PipelineConfig:
     config_path: str
     config_hash: str
     steps: List[StepConfig] = field(default_factory=list)
+    working_folder: Optional[str] = None
 
 
 @dataclass
