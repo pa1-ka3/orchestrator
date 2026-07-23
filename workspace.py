@@ -45,11 +45,23 @@ def prepare_workspace(working_folder: str) -> Workspace:
 
     If ``current`` already exists (an interrupted previous run), it is reused so
     that the checkpoint inside it enables recovery.
+
+    Raises ``ValueError`` if ``working_folder`` is empty and ``OSError`` if the
+    path is not a valid or accessible location on disk or the network.
     """
+    if not working_folder or not str(working_folder).strip():
+        raise ValueError("'working_folder' is not set.")
+
     base = Path(working_folder).expanduser()
     current = base / CURRENT_DIR_NAME
     checkpoint_dir = current / CHECKPOINT_DIR_NAME
-    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise OSError(
+            f"'working_folder' path '{working_folder}' is not a valid or "
+            f"accessible location: {exc}"
+        ) from exc
     logger.info("Using working folder '%s' (current run: '%s').", base, current)
     return Workspace(base_dir=base, current_dir=current, checkpoint_dir=checkpoint_dir)
 

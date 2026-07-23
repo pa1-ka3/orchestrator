@@ -1,8 +1,7 @@
 """Checkpoint manager — persistence for recovery points.
 
-Checkpoints are stored inside a caller-provided directory. When a pipeline
-declares a ``working_folder`` this is ``<working_folder>/current/pipeline_checkpoints``;
-otherwise a legacy directory next to the config file is used.
+Checkpoints are stored inside a caller-provided directory, namely
+``<working_folder>/current/pipeline_checkpoints`` for the active run.
 """
 
 import json
@@ -14,13 +13,6 @@ from typing import Optional
 from .models import CheckpointState, PipelineStatus
 
 logger = logging.getLogger(__name__)
-
-LEGACY_CHECKPOINT_DIR_NAME = ".pipeline_checkpoints"
-
-
-def legacy_checkpoint_dir(config_path: str) -> Path:
-    """Fallback checkpoint directory next to the config file."""
-    return Path(config_path).resolve().parent / LEGACY_CHECKPOINT_DIR_NAME
 
 
 def _checkpoint_file(checkpoint_dir: Path, config_path: str) -> Path:

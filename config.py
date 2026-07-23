@@ -112,6 +112,11 @@ def load_config(config_path: str) -> PipelineConfig:
         if raw_working_folder is not None:
             working_folder = str(raw_working_folder).strip() or None
 
+    if not working_folder:
+        raise ValueError(
+            "Pipeline config must define a non-empty 'pipeline.working_folder'."
+        )
+
     config = PipelineConfig(
         name=name,
         config_path=str(path),

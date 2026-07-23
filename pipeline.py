@@ -10,7 +10,6 @@ from pathlib import Path
 
 from .checkpoint import (
     clear_checkpoint,
-    legacy_checkpoint_dir,
     load_checkpoint,
     save_checkpoint,
 )
@@ -26,7 +25,13 @@ from .models import (
     StepStatus,
 )
 from .quarantine import quarantine_step
-from .workspace import Workspace, finalize_workspace, prepare_workspace
+from .workspace import (
+    CHECKPOINT_DIR_NAME,
+    CURRENT_DIR_NAME,
+    Workspace,
+    finalize_workspace,
+    prepare_workspace,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -102,17 +107,17 @@ def run_pipeline(config_path: str, dry_run: bool = False) -> bool:
         " → ".join(s.name for s in steps),
     )
 
-    # Resolve run directories. When a working_folder is configured, the active
-    # run lives under <working_folder>/current and its checkpoints inside it;
-    # otherwise fall back to a checkpoint directory next to the config file.
+    # Resolve run directories. The active run lives under
+    # <working_folder>/current and its checkpoints inside it. On a dry run the
+    # paths are computed but never created so the disk is left untouched.
     workspace: Optional[Workspace] = None
     current_dir: Optional[Path] = None
-    if config.working_folder and not dry_run:
+    if dry_run:
+        checkpoint_dir = Path(config.working_folder).expanduser() / CURRENT_DIR_NAME / CHECKPOINT_DIR_NAME
+    else:
         workspace = prepare_workspace(config.working_folder)
         current_dir = workspace.current_dir
         checkpoint_dir = workspace.checkpoint_dir
-    else:
-        checkpoint_dir = legacy_checkpoint_dir(config_path)
 
     # Load existing checkpoint for recovery
     checkpoint = load_checkpoint(config_path, checkpoint_dir)
@@ -232,6 +237,10 @@ def main() -> None:
             ok = run_pipeline(args.config, dry_run=args.dry_run)
             sys.exit(0 if ok else 1)
     except RuntimeError as exc:
+        logger.error(str(exc))
+        sys.exit(2)
+    except (ValueError, OSError) as exc:
+        # Configuration or working_folder path problems — report cleanly.
         logger.error(str(exc))
         sys.exit(2)
     except KeyboardInterrupt:
