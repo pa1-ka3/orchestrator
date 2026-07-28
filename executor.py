@@ -84,7 +84,7 @@ def execute_step(step: StepConfig, current_dir: Optional[Path] = None) -> StepRe
         else:
             logger.error(
                 "Step '%s' failed with exit code %d in %.1fs.\nstderr: %s",
-                step.name, proc.returncode, elapsed, proc.stderr[:500],
+                step.name, proc.returncode, elapsed, proc.stderr,
             )
             return StepResult(
                 step_name=step.name,
