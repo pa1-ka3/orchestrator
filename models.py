@@ -31,6 +31,7 @@ class StepConfig:
     command: str
     args: List[str] = field(default_factory=list)
     kwargs: Dict[str, str] = field(default_factory=dict)
+    env: Dict[str, str] = field(default_factory=dict)
     timeout_seconds: Optional[int] = None
 
 

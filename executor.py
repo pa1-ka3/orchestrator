@@ -47,10 +47,17 @@ def execute_step(step: StepConfig, current_dir: Optional[Path] = None) -> StepRe
 
     cwd = None
     env = None
-    if current_dir is not None:
-        cwd = str(current_dir)
+    if current_dir is not None or step.env:
         env = os.environ.copy()
-        env["PIPELINE_CURRENT_DIR"] = str(current_dir)
+        if current_dir is not None:
+            cwd = str(current_dir)
+            env["PIPELINE_CURRENT_DIR"] = str(current_dir)
+        for key, value in step.env.items():
+            # Substitute the current-dir placeholder, then expand references to
+            # existing environment variables (e.g. "c:\\mydir;%PYTHONPATH%")
+            # so steps can extend a variable instead of overwriting it.
+            resolved = _substitute(value, current_dir)
+            env[key] = os.path.expandvars(resolved)
 
     start = time.monotonic()
     try:

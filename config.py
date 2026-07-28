@@ -46,6 +46,7 @@ def _parse_steps_from_object(data: dict) -> List[StepConfig]:
             command=step_data["command_to_run"],
             args=step_data.get("args", []),
             kwargs=_normalize_kwargs(step_data.get("kwargs", {})),
+            env=_normalize_kwargs(step_data.get("env", {})),
             timeout_seconds=step_data.get("timeout_seconds"),
         ))
     return steps
@@ -63,6 +64,7 @@ def _parse_steps_from_array(data: dict) -> List[StepConfig]:
             command=item["command_to_run"],
             args=item.get("args", []),
             kwargs=_normalize_kwargs(item.get("kwargs", {})),
+            env=_normalize_kwargs(item.get("env", {})),
             timeout_seconds=item.get("timeout_seconds"),
         ))
     steps.sort(key=lambda s: s.order)
